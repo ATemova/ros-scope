@@ -56,6 +56,11 @@ flowchart LR
     stream -->|live tail| api
     pubsub --> api
     api --> dash
+
+    classDef store fill:#1f6feb,stroke:#0a3a8c,stroke-width:1px,color:#ffffff;
+    classDef svc fill:#ff8a3d,stroke:#b3551c,stroke-width:1px,color:#1a1a1a;
+    class stream,db,pubsub store;
+    class bridge,sim,ingest,alerts,api,dash svc;
 ```
 
 The design decision worth calling out: **ingestion is separated from serving.** A Redis Stream absorbs sensor-rate bursts, a dedicated worker drains it with batched inserts, and the API only reads — so write throughput and the web tier scale independently. Full rationale in [`docs/architecture.md`](docs/architecture.md).
@@ -157,11 +162,29 @@ tests/    unit tests: rule engine, schema, simulator
 ## Roadmap
 
 ```mermaid
-timeline
-    title rosscope roadmap
-    Shipped : Live telemetry and 3D pose : Threshold and staleness alerts : Session record and replay
-    Next : React and TypeScript dashboard : rosbag2 export of recorded sessions
-    Later : Zenoh transport option : ML anomaly detection on sensor windows : Deployed public demo
+flowchart LR
+    subgraph Shipped
+        s1["Live telemetry + 3D pose"]
+        s2["Threshold + staleness alerts"]
+        s3["Session record + replay"]
+    end
+    subgraph Next
+        n1["React + TypeScript dashboard"]
+        n2["rosbag2 session export"]
+    end
+    subgraph Later
+        l1["Zenoh transport option"]
+        l2["ML anomaly detection"]
+        l3["Deployed public demo"]
+    end
+    Shipped --> Next --> Later
+
+    classDef done    fill:#2ea043,stroke:#176f2c,color:#ffffff;
+    classDef planned fill:#ff8a3d,stroke:#b3551c,color:#1a1a1a;
+    classDef future  fill:#1f6feb,stroke:#0a3a8c,color:#ffffff;
+    class s1,s2,s3 done;
+    class n1,n2 planned;
+    class l1,l2,l3 future;
 ```
 
 ## License
