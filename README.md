@@ -17,12 +17,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/ATemova/ros-scope/ci.yml?branch=main&logo=githubactions&logoColor=white&label=CI)](https://github.com/ATemova/ros-scope/actions/workflows/ci.yml)
 ![License](https://img.shields.io/badge/License-MIT-3DA639)
 
-rosscope is a production-style observability platform for robot fleets. It bridges ROS 2 topics into a time-series database and serves a live dashboard with 3D pose, signal charts, per-topic health, and threshold + staleness alerts. The whole stack comes up with `docker compose up` and streams a synthetic fleet immediately — so you can try it without ROS installed and without hardware — then runs unchanged against a real robot via the ROS 2 bridge.
-
-<!-- Replace with a screen recording of the running dashboard. The hero GIF is
-     the single most important element of this README — record ~10s showing the
-     3D trails moving, a chart updating, and an alert landing. -->
-![rosscope dashboard](docs/dashboard.gif)
+Ros Scope is a production-style observability platform for robot fleets. It bridges ROS 2 topics into a time-series database and serves a live dashboard with 3D pose, signal charts, per-topic health, and threshold + staleness alerts. The whole stack comes up with `docker compose up` and streams a synthetic fleet immediately — so you can try it without ROS installed and without hardware — then runs unchanged against a real robot via the ROS 2 bridge.
 
 ## What it does
 
@@ -34,14 +29,33 @@ rosscope is a production-style observability platform for robot fleets. It bridg
 
 ## Architecture
 
-```
-producers          buffer            workers              storage           serving
-─────────          ──────            ───────              ───────           ───────
-ROS 2 bridge  ─┐                 ┌─ ingest  ─┐
-               ├▶ Redis Stream ──┤            ├▶ TimescaleDB ──▶ FastAPI ──▶ dashboard
-synthetic sim ─┘   "telemetry"   └─ alerts  ─┘   (+ 1s rollup)   REST + WS    (3D · charts ·
-                                     │                            ▲            health · alerts)
-                                     └── Redis Pub/Sub "alerts" ──┘
+```mermaid
+flowchart LR
+    subgraph Producers
+        bridge["ROS 2 bridge<br/>(rclpy)"]
+        sim["Synthetic fleet<br/>publisher"]
+    end
+    subgraph Workers
+        ingest["ingest worker<br/>batched writes"]
+        alerts["alert engine<br/>threshold + staleness"]
+    end
+    stream[("Redis Stream<br/>telemetry")]
+    db[("TimescaleDB<br/>hypertables + 1s rollup")]
+    pubsub[("Redis Pub/Sub<br/>alerts")]
+    api["FastAPI<br/>REST + WebSocket"]
+    dash["Dashboard<br/>3D, charts, health, alerts"]
+
+    bridge --> stream
+    sim --> stream
+    stream --> ingest
+    stream --> alerts
+    ingest --> db
+    alerts --> db
+    alerts --> pubsub
+    db -->|history| api
+    stream -->|live tail| api
+    pubsub --> api
+    api --> dash
 ```
 
 The design decision worth calling out: **ingestion is separated from serving.** A Redis Stream absorbs sensor-rate bursts, a dedicated worker drains it with batched inserts, and the API only reads — so write throughput and the web tier scale independently. Full rationale in [`docs/architecture.md`](docs/architecture.md).
@@ -142,11 +156,13 @@ tests/    unit tests: rule engine, schema, simulator
 
 ## Roadmap
 
-- React + TypeScript dashboard (current frontend is dependency-light vanilla ES)
-- rosbag2 export of recorded sessions (session record/replay is already implemented over the telemetry store)
-- Zenoh transport option (`zenoh-bridge-ros2dds`) as an alternative to the bridge node
-- Statistical / ML anomaly detection on multivariate sensor windows
-- Deployed public demo
+```mermaid
+timeline
+    title rosscope roadmap
+    Shipped : Live telemetry and 3D pose : Threshold and staleness alerts : Session record and replay
+    Next : React and TypeScript dashboard : rosbag2 export of recorded sessions
+    Later : Zenoh transport option : ML anomaly detection on sensor windows : Deployed public demo
+```
 
 ## License
 
