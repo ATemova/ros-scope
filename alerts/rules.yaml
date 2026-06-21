@@ -1,0 +1,47 @@
+# Alert rules for rosscope.
+# Two rule families:
+#   threshold  - compare a metric against a bound (op: lt | gt)
+#   staleness  - fire when a topic stops arriving within `timeout_s`
+#
+# Each rule has a severity (info | warning | critical) and a cooldown so a
+# flapping signal does not spam the alert feed.
+
+thresholds:
+  - name: battery_low
+    metric: voltage
+    op: lt
+    bound: 22.0
+    severity: warning
+    cooldown_s: 30
+    message: "Battery voltage low"
+
+  - name: battery_critical
+    metric: voltage
+    op: lt
+    bound: 20.5
+    severity: critical
+    cooldown_s: 30
+    message: "Battery critically low — return to dock"
+
+  - name: cpu_overheat
+    metric: cpu_temp
+    op: gt
+    bound: 75.0
+    severity: warning
+    cooldown_s: 20
+    message: "CPU temperature high"
+
+staleness:
+  - name: scan_stale
+    topic: /scan
+    timeout_s: 3.0
+    severity: warning
+    cooldown_s: 15
+    message: "No /scan data — sensor may be down"
+
+  - name: odom_stale
+    topic: /odom
+    timeout_s: 3.0
+    severity: critical
+    cooldown_s: 15
+    message: "No odometry — robot localization lost"

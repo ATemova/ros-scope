@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>rosscope — fleet telemetry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.30/dist/uPlot.min.css" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="mark">◎</span>
+    <span class="name">rosscope</span>
+    <span class="tag">fleet telemetry &amp; observability</span>
+  </div>
+  <div class="status">
+    <button id="rec-btn" class="ctl ctl--rec">● REC</button>
+    <select id="session-select" class="ctl select"><option value="">live view</option></select>
+    <span id="conn" class="conn conn--down"><i></i>offline</span>
+  </div>
+</header>
+
+<div class="kpis">
+  <div class="kpi"><span class="kpi__val" id="kpi-online">—</span><span class="kpi__label">robots online</span></div>
+  <div class="kpi"><span class="kpi__val" id="kpi-alerts">—</span><span class="kpi__label">active alerts</span></div>
+  <div class="kpi"><span class="kpi__val" id="kpi-batt">—</span><span class="kpi__label">lowest battery</span></div>
+  <div class="kpi"><span class="kpi__val" id="kpi-rate">—</span><span class="kpi__label">msg / s</span></div>
+</div>
+
+<div id="offline" class="offline" hidden><span>connection lost — reconnecting…</span></div>
+
+<div id="replay-bar" class="replay" hidden>
+  <span class="replay__tag">REPLAY</span>
+  <span id="rp-name" class="replay__name">—</span>
+  <button id="rp-play" class="rp-btn">▶</button>
+  <input id="rp-seek" class="rp-seek" type="range" min="0" max="1000" value="0" />
+  <span id="rp-time" class="rp-time">0:00 / 0:00</span>
+  <select id="rp-speed" class="ctl"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select>
+  <button id="rp-exit" class="rp-btn rp-btn--exit">return to live</button>
+</div>
+
+<main class="grid">
+  <!-- Hero: 3D pose viewer -->
+  <section class="panel panel--scene">
+    <div class="panel__head">
+      <h2>fleet pose</h2>
+      <span class="panel__hint">live odometry · drag to orbit</span>
+    </div>
+    <div id="scene" class="scene"></div>
+    <div id="legend" class="legend"></div>
+  </section>
+
+  <!-- Live charts -->
+  <section class="panel panel--charts">
+    <div class="panel__head">
+      <h2>signals</h2>
+      <select id="robot-select" class="select"></select>
+    </div>
+    <div class="chart-wrap"><div class="chart__label">battery voltage <span class="unit">V</span></div><div id="chart-batt"></div></div>
+    <div class="chart-wrap"><div class="chart__label">cpu temperature <span class="unit">°C</span></div><div id="chart-temp"></div></div>
+  </section>
+
+  <!-- Topic health strip (signature element) -->
+  <section class="panel panel--health">
+    <div class="panel__head"><h2>topic health</h2><span class="panel__hint">observed rate · last 10s</span></div>
+    <div id="health" class="channels"></div>
+  </section>
+
+  <!-- Alert feed -->
+  <section class="panel panel--alerts">
+    <div class="panel__head"><h2>alerts</h2><span id="alert-badge" class="badge">0</span></div>
+    <ul id="alerts" class="alerts"></ul>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.30/dist/uPlot.iife.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
