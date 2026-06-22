@@ -19,12 +19,13 @@
 
 Ros Scope is a production-style observability platform for robot fleets. It bridges ROS 2 topics into a time-series database and serves a live dashboard with 3D pose, signal charts, per-topic health, and threshold + staleness alerts. The whole stack comes up with `docker compose up` and streams a synthetic fleet immediately — so you can try it without ROS installed and without hardware — then runs unchanged against a real robot via the ROS 2 bridge.
 
+
 ## What it does
 
 - **Live 3D pose** for the whole fleet with per-robot trajectory trails, fed by odometry over a WebSocket.
 - **Streaming signal charts** (battery, CPU temperature, IMU) with history backed by TimescaleDB.
 - **Topic health strip** showing the observed rate of each topic and flagging the moment one goes stale.
-- **Alerting** on thresholds (battery low/critical, CPU overheat) and on missing data (a sensor topic that stops arriving), pushed live to the dashboard.
+- **Alerting** on thresholds (battery low/critical, CPU overheat), on missing data (a sensor topic that stops arriving), and on **multivariate anomalies** — a rolling Mahalanobis-distance detector that flags unusual *combinations* of signals the fixed thresholds miss — all pushed live to the dashboard.
 - **Session record & replay**: bookmark a time range, then scrub through it on a timeline (play/pause/seek/speed) with the whole dashboard — 3D trails, charts, alerts — replaying from stored data.
 
 ## Architecture
@@ -37,7 +38,7 @@ flowchart LR
     end
     subgraph Workers
         ingest["ingest worker<br/>batched writes"]
-        alerts["alert engine<br/>threshold + staleness"]
+        alerts["alert engine<br/>thresholds, staleness, anomaly"]
     end
     stream[("Redis Stream<br/>telemetry")]
     db[("TimescaleDB<br/>hypertables + 1s rollup")]
@@ -152,39 +153,11 @@ common/   shared telemetry envelope + logging helper (used by every service)
 sim/      synthetic fleet publisher  (default data source)
 bridge/   ROS 2 rclpy bridge + demo bot  (profile: ros)
 ingest/   Redis stream -> TimescaleDB worker
-alerts/   threshold + staleness rule engine
+alerts/   threshold, staleness + anomaly rule engine
 api/      FastAPI: REST, /ws/live, static dashboard
 api/static/  the dashboard (Three.js + µPlot)
 db/       TimescaleDB schema + continuous aggregate
-tests/    unit tests: rule engine, schema, simulator
-```
-
-## Roadmap
-
-```mermaid
-flowchart LR
-    subgraph Shipped
-        s1["Live telemetry + 3D pose"]
-        s2["Threshold + staleness alerts"]
-        s3["Session record + replay"]
-    end
-    subgraph Next
-        n1["React + TypeScript dashboard"]
-        n2["rosbag2 session export"]
-    end
-    subgraph Later
-        l1["Zenoh transport option"]
-        l2["ML anomaly detection"]
-        l3["Deployed public demo"]
-    end
-    Shipped --> Next --> Later
-
-    classDef done    fill:#2ea043,stroke:#176f2c,color:#ffffff;
-    classDef planned fill:#ff8a3d,stroke:#b3551c,color:#1a1a1a;
-    classDef future  fill:#1f6feb,stroke:#0a3a8c,color:#ffffff;
-    class s1,s2,s3 done;
-    class n1,n2 planned;
-    class l1,l2,l3 future;
+tests/    unit tests: rules, schema, simulator, anomaly
 ```
 
 ## License

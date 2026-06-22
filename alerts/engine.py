@@ -18,6 +18,7 @@ import os
 import time
 from dataclasses import dataclass
 
+from alerts.anomaly import AnomalyDetector
 from common.log import get_logger
 
 # Note: asyncpg / redis / yaml are imported lazily inside the functions that
@@ -122,6 +123,14 @@ async def main() -> None:
         rules = yaml.safe_load(f)
     thresholds = rules.get("thresholds", [])
     staleness = rules.get("staleness", [])
+    acfg = rules.get("anomaly", {}) or {}
+    detector = None
+    if acfg.get("enabled"):
+        detector = AnomalyDetector(
+            features=acfg.get("features", ["voltage", "cpu_temp", "yaw_rate"]),
+            window=acfg.get("window", 240), warmup=acfg.get("warmup", 60),
+            threshold=acfg.get("threshold", 4.0), cooldown_s=acfg.get("cooldown_s", 20))
+    anomaly_severity = acfg.get("severity", "warning")
 
     r = aioredis.from_url(REDIS_URL)
     pool = await _connect_pg()
@@ -134,7 +143,8 @@ async def main() -> None:
     cd = Cooldowns()
     last_seen: dict[tuple[str, str], float] = {}
     asyncio.create_task(staleness_loop(pool, r, staleness, last_seen, cd))
-    log.info("%d thresholds, %d staleness rules", len(thresholds), len(staleness))
+    log.info("%d thresholds, %d staleness rules, anomaly=%s",
+             len(thresholds), len(staleness), bool(detector))
 
     while True:
         resp = await r.xreadgroup(GROUP, CONSUMER, {STREAM: ">"}, count=100, block=1000)
@@ -143,9 +153,19 @@ async def main() -> None:
             for msg_id, fields in entries:
                 ids.append(msg_id)
                 s = Sample.from_json(fields[b"data"])
+                now = time.time()
                 last_seen[(s.robot_id, s.topic)] = s.ts
-                for alert in evaluate_sample(s, thresholds, cd, time.time()):
+                for alert in evaluate_sample(s, thresholds, cd, now):
                     await persist_and_publish(pool, r, alert)
+                if detector and s.kind == "scalar":
+                    for metric, value in s.metrics.items():
+                        hit = detector.update(s.robot_id, metric, value, now)
+                        if hit:
+                            feats = ", ".join(f"{k}={v}" for k, v in hit["features"].items())
+                            await persist_and_publish(pool, r, Alert(
+                                s.robot_id, None, "anomaly", anomaly_severity,
+                                f"Unusual sensor pattern (score {hit['score']}): {feats}",
+                                hit["score"]))
         if ids:
             await r.xack(STREAM, GROUP, *ids)
 

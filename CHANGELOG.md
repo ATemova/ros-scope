@@ -5,6 +5,9 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 ### Added
+- Multivariate anomaly detection: a rolling Mahalanobis-distance detector
+  (`alerts/anomaly.py`) flags unusual combinations of signals that fixed
+  thresholds miss; configurable under `anomaly:` in `rules.yaml`. Unit-tested.
 - Session record & replay: bookmark a window, then scrub it on a timeline
   (play/pause/seek/speed) with 3D trails, charts, and alerts replayed from
   stored data. New `sessions` table and `/api/sessions/*` endpoints.

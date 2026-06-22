@@ -45,3 +45,14 @@ staleness:
     severity: critical
     cooldown_s: 15
     message: "No odometry — robot localization lost"
+
+# Multivariate anomaly detection (Mahalanobis distance over a rolling window).
+# Flags unusual *combinations* of signals that per-metric thresholds miss.
+anomaly:
+  enabled: true
+  features: [voltage, cpu_temp, yaw_rate]
+  window: 240        # samples kept per robot
+  warmup: 60         # samples before scoring starts
+  threshold: 4.0     # Mahalanobis distance cut
+  cooldown_s: 20
+  severity: warning
