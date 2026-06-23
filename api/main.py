@@ -19,9 +19,10 @@ from datetime import UTC
 import asyncpg
 import redis.asyncio as aioredis
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
+from api.metrics import render_prometheus
 from common.log import get_logger
 from common.schema import ALERTS_CHANNEL, STREAM, Sample
 
@@ -265,6 +266,33 @@ async def ws_live(ws: WebSocket):
     finally:
         await pubsub.unsubscribe(ALERTS_CHANNEL)
         await pubsub.aclose()
+
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus exposition of rosscope's own state — scrape this and graph it
+    in Grafana. The observability platform is itself observable."""
+    pool = state["pool"]
+    online = await pool.fetchval(
+        "SELECT count(DISTINCT robot_id) FROM telemetry WHERE time > now() - interval '10 seconds'")
+    samples_1m = await pool.fetchval(
+        "SELECT count(*) FROM telemetry WHERE time > now() - interval '1 minute'")
+    active_alerts = await pool.fetchval(
+        "SELECT count(*) FROM alerts WHERE time > now() - interval '5 minutes'")
+    anomaly_1h = await pool.fetchval(
+        "SELECT count(*) FROM alerts WHERE rule='anomaly' AND time > now() - interval '1 hour'")
+    min_batt = await pool.fetchval(
+        "SELECT min(value) FROM telemetry WHERE metric='voltage' AND time > now() - interval '30 seconds'")
+    sessions = await pool.fetchval("SELECT count(*) FROM sessions")
+    body = render_prometheus([
+        ("rosscope_robots_online", "gauge", "Robots reporting telemetry in the last 10s", online or 0),
+        ("rosscope_samples_1m", "gauge", "Telemetry samples ingested in the last minute", samples_1m or 0),
+        ("rosscope_active_alerts", "gauge", "Alerts raised in the last 5 minutes", active_alerts or 0),
+        ("rosscope_anomaly_alerts_1h", "gauge", "Anomaly alerts in the last hour", anomaly_1h or 0),
+        ("rosscope_min_battery_volts", "gauge", "Lowest battery voltage in the last 30s", min_batt),
+        ("rosscope_sessions_total", "gauge", "Recorded sessions", sessions or 0),
+    ])
+    return PlainTextResponse(body, media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
 @app.get("/healthz")

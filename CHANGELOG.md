@@ -5,6 +5,10 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 ### Added
+- Prometheus `/metrics` endpoint (ingest rate, active alerts, anomalies, fleet
+  KPIs) so rosscope is itself scrapeable and Grafana-graphable. Unit-tested.
+- SVG dashboard preview (`docs/preview.svg`) as the README hero until a screen
+  recording is added.
 - Multivariate anomaly detection: a rolling Mahalanobis-distance detector
   (`alerts/anomaly.py`) flags unusual combinations of signals that fixed
   thresholds miss; configurable under `anomaly:` in `rules.yaml`. Unit-tested.
