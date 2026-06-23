@@ -112,6 +112,12 @@ document.getElementById("robot-select").addEventListener("change", (e) => { sele
 
 // ---- charts (uPlot) ------------------------------------------------------ //
 function makeChart(el, stroke) {
+  const fill = (u) => {
+    const g = u.ctx.createLinearGradient(0, u.bbox.top, 0, u.bbox.top + u.bbox.height);
+    g.addColorStop(0, stroke + "44");   // tinted near the line
+    g.addColorStop(1, stroke + "00");   // fading to transparent
+    return g;
+  };
   const opts = {
     width: el.clientWidth || 360, height: 120,
     cursor: { show: true }, legend: { show: false },
@@ -120,7 +126,7 @@ function makeChart(el, stroke) {
       { stroke: "#6b7b8a", grid: { stroke: "#24303b" }, ticks: { stroke: "#24303b" }, size: 30 },
       { stroke: "#6b7b8a", grid: { stroke: "#24303b" }, ticks: { stroke: "#24303b" }, size: 44 },
     ],
-    series: [{}, { stroke, width: 1.6, points: { show: false } }],
+    series: [{}, { stroke, width: 2, fill, points: { show: false } }],
   };
   return new uPlot(opts, [[], []], el);
 }
@@ -154,10 +160,10 @@ function initScene() {
   renderer.setSize(host.clientWidth, host.clientHeight);
   host.appendChild(renderer.domElement);
 
-  grid = new THREE.GridHelper(40, 40, 0x24303b, 0x1b242d);
+  grid = new THREE.GridHelper(40, 40, 0x33424f, 0x202b34);
   scene.add(grid);
-  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-  const dir = new THREE.DirectionalLight(0xffffff, 0.5);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.55);
   dir.position.set(5, 12, 8); scene.add(dir);
 
   // drag to orbit
@@ -179,14 +185,33 @@ function ensureRobotVisual(id) {
   const c = new THREE.Color(colorFor(id));
   const cone = new THREE.Mesh(
     new THREE.ConeGeometry(0.45, 1.2, 16),
-    new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.35 }));
+    new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.6 }));
   cone.rotation.x = Math.PI / 2;
   r.marker = cone; scene.add(cone);
   r.line = new THREE.Line(
     new THREE.BufferGeometry(),
-    new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: 0.7 }));
+    new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9 }));
   scene.add(r.line);
   return r;
+}
+
+// Build a trail that fades from dim (oldest) to bright (newest) via vertex colors.
+function setTrail(line, pts, hex) {
+  const n = pts.length;
+  if (n < 2) return;
+  const pos = new Float32Array(n * 3);
+  const col = new Float32Array(n * 3);
+  const base = new THREE.Color(hex);
+  for (let i = 0; i < n; i++) {
+    pos[i * 3] = pts[i].x; pos[i * 3 + 1] = pts[i].y; pos[i * 3 + 2] = pts[i].z;
+    const f = 0.12 + 0.88 * (i / (n - 1));   // brightness ramp tail -> head
+    col[i * 3] = base.r * f; col[i * 3 + 1] = base.g * f; col[i * 3 + 2] = base.b * f;
+  }
+  const g = line.geometry;
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  g.setDrawRange(0, n);
+  g.computeBoundingSphere();
 }
 
 function rebuildScene() {
@@ -216,10 +241,14 @@ function animate() {
   camera.lookAt(0, 0, 0);
   if (mode === "replay") renderReplayScene();
   else {
-    for (const [, r] of robots) {
-      if (r.marker && r.pose) r.marker.position.set(r.pose.x, 0.6, -r.pose.y);
+    const pulse = 1 + 0.06 * Math.sin(performance.now() * 0.004);
+    for (const [id, r] of robots) {
+      if (r.marker && r.pose) {
+        r.marker.position.set(r.pose.x, 0.6, -r.pose.y);
+        r.marker.scale.setScalar(pulse);
+      }
       if (r.line && r.trail.length > 1) {
-        r.line.geometry.setFromPoints(r.trail.map((p) => new THREE.Vector3(p[0], 0.05, p[2])));
+        setTrail(r.line, r.trail.map((p) => new THREE.Vector3(p[0], 0.05, p[2])), colorFor(id));
       }
     }
   }
@@ -366,7 +395,7 @@ function renderReplayScene() {
     const last = upto[upto.length - 1];
     r.marker.position.set(last.x, 0.6, -last.y);
     const trail = upto.slice(-400).map((p) => new THREE.Vector3(p.x, 0.05, -p.y));
-    if (trail.length > 1) r.line.geometry.setFromPoints(trail);
+    if (trail.length > 1) setTrail(r.line, trail, colorFor(id));
   }
 }
 

@@ -205,3 +205,49 @@ body {
   }
 }
 @media (prefers-reduced-motion: reduce) { .alert { animation: none; } }
+
+/* ---------- visual polish ---------- */
+/* faint technical dot-grid on the backdrop */
+body {
+  background-color: var(--bg);
+  background-image: radial-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* brand + live indicator glow */
+.brand .mark { text-shadow: 0 0 10px rgba(255, 138, 61, 0.6); }
+
+/* accent underline on panel headers */
+.panel__head { position: relative; }
+.panel__head::after {
+  content: ""; position: absolute; left: 0; bottom: -1px; height: 1px; width: 64px;
+  background: linear-gradient(90deg, var(--signal), transparent);
+}
+
+/* lit-floor gradient + vignette behind the transparent 3D canvas */
+.scene {
+  background: radial-gradient(ellipse 70% 60% at 50% 42%, #1b2730 0%, #131b22 55%, #0e1419 100%);
+}
+.scene::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  box-shadow: inset 0 0 90px 10px rgba(0, 0, 0, 0.55);
+}
+
+/* KPI values glow when they signal trouble */
+.kpi__val.warn  { text-shadow: 0 0 14px rgba(224, 179, 65, 0.55); }
+.kpi__val.alarm { text-shadow: 0 0 14px rgba(228, 87, 76, 0.60); }
+
+/* stale topic-health channels pulse to draw the eye */
+.channel.stale { animation: stalepulse 1.6s ease-in-out infinite; }
+@keyframes stalepulse {
+  0%, 100% { border-left-color: var(--crit); background: var(--panel-2); }
+  50%      { border-left-color: #ff6f64;     background: #221a1c; }
+}
+
+/* critical alerts get a soft glow */
+.alert.critical { box-shadow: inset 2px 0 12px -6px var(--crit); }
+.alert.critical i { box-shadow: 0 0 8px var(--crit); }
+
+@media (prefers-reduced-motion: reduce) {
+  .channel.stale { animation: none; }
+}
