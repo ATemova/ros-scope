@@ -103,7 +103,7 @@ The design decision worth calling out: **ingestion is separated from serving.** 
 | Storage | TimescaleDB (hypertables, continuous aggregates, retention) |
 | Streaming | Redis Streams (pipeline) + Redis Pub/Sub (alerts) |
 | Frontend | Three.js (3D pose), µPlot (charts), vanilla ES — no build step |
-| Observability | Prometheus `/metrics` |
+| Observability | Prometheus `/metrics`, Grafana dashboard |
 | Infrastructure | Docker Compose, multi-service, health-gated startup |
 | Testing | Pytest, Ruff, GitHub Actions CI |
 
@@ -136,10 +136,34 @@ Lint and the full test suite run with no containers — the rule engine, schema,
 ```bash
 pip install -r requirements-dev.txt
 ruff check .
-pytest -q                  # 22 tests
+pytest -q                  # 27 tests
 ```
 
 CI runs lint and tests as separate jobs on every push. See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`CHANGELOG.md`](CHANGELOG.md).
+
+## 📊 Monitoring (Prometheus + Grafana)
+
+Ros Scope exposes `/metrics`, so it can be scraped and graphed like any production service. A ready-to-run monitoring stack ships behind a compose profile:
+
+```bash
+docker compose --profile monitoring up --build
+```
+
+- **Grafana** → http://localhost:3000 (anonymous viewer enabled) with a provisioned "Ros Scope — fleet overview" dashboard.
+- **Prometheus** → http://localhost:9090, scraping the API every 5s.
+
+The dashboard panels (robots online, active alerts, anomalies, lowest battery, ingest rate, sessions) are defined in [`monitoring/`](monitoring/) and provisioned automatically — no manual setup.
+
+## ⚡ Performance
+
+A benchmark harness floods the pipeline and measures publish throughput, ingest throughput, and end-to-end (produce → queryable in TimescaleDB) latency:
+
+```bash
+docker compose up -d --build                                   # stack running
+docker compose --profile bench run --rm bench --count 100000 --latency-samples 500
+```
+
+It prints a JSON summary (throughput and p50/p95/p99 latency) suitable for dropping into a results table here. The metric math (`bench/stats.py`) is pure and unit-tested.
 
 ## 🛠 Engineering Decisions
 
@@ -164,7 +188,9 @@ alerts/   threshold, staleness + anomaly rule engine
 api/      FastAPI: REST, /ws/live, /metrics, static dashboard
 api/static/  the dashboard (Three.js + µPlot)
 db/       TimescaleDB schema + continuous aggregate
-tests/    unit tests: rules, schema, simulator, anomaly, metrics
+monitoring/  Prometheus scrape config + provisioned Grafana dashboard
+bench/    pipeline benchmark harness (throughput + latency)
+tests/    unit tests: rules, schema, simulator, anomaly, metrics, bench
 ```
 
 ## 🎯 Outcome

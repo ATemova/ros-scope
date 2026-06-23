@@ -20,6 +20,6 @@ jobs:
         with: { python-version: "3.12" }
       - run: pip install pytest pyyaml numpy
       - name: Byte-compile all sources
-        run: python -m compileall -q common sim ingest alerts api bridge
+        run: python -m compileall -q common sim ingest alerts api bridge bench
       - name: Run unit tests
         run: python -m pytest -q tests

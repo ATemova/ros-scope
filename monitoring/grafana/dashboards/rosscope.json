@@ -1,0 +1,56 @@
+{
+  "uid": "rosscope-overview",
+  "title": "rosscope — fleet overview",
+  "tags": ["rosscope"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Robots online",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "targets": [ { "refId": "A", "expr": "rosscope_robots_online" } ],
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" } } }
+    },
+    {
+      "id": 2, "type": "stat", "title": "Active alerts (5m)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "targets": [ { "refId": "A", "expr": "rosscope_active_alerts" } ],
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [
+        { "color": "green", "value": null }, { "color": "orange", "value": 1 } ] } } }
+    },
+    {
+      "id": 3, "type": "stat", "title": "Anomaly alerts (1h)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "targets": [ { "refId": "A", "expr": "rosscope_anomaly_alerts_1h" } ]
+    },
+    {
+      "id": 4, "type": "gauge", "title": "Lowest battery (V)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+      "targets": [ { "refId": "A", "expr": "rosscope_min_battery_volts" } ],
+      "fieldConfig": { "defaults": { "min": 18, "max": 26, "unit": "volt", "thresholds": {
+        "mode": "absolute", "steps": [
+          { "color": "red", "value": null }, { "color": "orange", "value": 20.5 },
+          { "color": "green", "value": 22 } ] } } }
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "Telemetry ingest (samples / min)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 18, "x": 0, "y": 5 },
+      "targets": [ { "refId": "A", "expr": "rosscope_samples_1m" } ],
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 12 } } }
+    },
+    {
+      "id": 6, "type": "stat", "title": "Recorded sessions",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 6, "x": 18, "y": 5 },
+      "targets": [ { "refId": "A", "expr": "rosscope_sessions_total" } ]
+    }
+  ]
+}

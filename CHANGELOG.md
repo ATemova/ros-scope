@@ -5,6 +5,10 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 ### Added
+- Monitoring stack behind a `monitoring` compose profile: Prometheus scraping
+  `/metrics` and a provisioned Grafana dashboard (`monitoring/`).
+- Benchmark harness (`bench/`) measuring publish/ingest throughput and end-to-end
+  latency, behind a `bench` compose profile; pure stats helpers are unit-tested.
 - Prometheus `/metrics` endpoint (ingest rate, active alerts, anomalies, fleet
   KPIs) so rosscope is itself scrapeable and Grafana-graphable. Unit-tested.
 - SVG dashboard preview (`docs/preview.svg`) as the README hero until a screen
