@@ -73,6 +73,7 @@ The design decision worth calling out: **ingestion is separated from serving.** 
 - **3D pose visualization** — live robot positions with historical trajectory trails in a shared scene.
 - **Telemetry analytics** — battery, CPU temperature, and IMU signals with history backed by TimescaleDB and 1-second rollups.
 - **Alert engine** — threshold rules, topic staleness/missing-data detection, and **multivariate anomaly detection** (rolling Mahalanobis distance) that flags unusual *combinations* of signals the thresholds miss.
+- **Occupancy map + live laser scans** — the 3D viewer renders a `nav_msgs/OccupancyGrid` as the scene floor and `sensor_msgs/LaserScan` returns as a live point cloud around each robot. Demoable on the synthetic fleet today; the bridge consumes real Nav2/Gazebo `/map` and `/scan` unchanged.
 - **Session record & replay** — bookmark a time range, then scrub through it on a timeline (play/pause/seek/speed) with the whole dashboard replaying from stored data.
 - **Self-observable** — a Prometheus `/metrics` endpoint so Ros Scope can be scraped and graphed in Grafana like any production service.
 
@@ -92,6 +93,7 @@ The design decision worth calling out: **ingestion is separated from serving.** 
 | GET | `/api/sessions` | List recorded sessions |
 | GET | `/api/sessions/{id}/data` | Replay payload (pose trails, series, alerts) |
 | WS | `/ws/live` | Live telemetry (stream tail) + alerts (pub/sub) |
+| GET | `/api/map` | Latest occupancy grid (rendered as the 3D scene floor) |
 | GET | `/metrics` | Prometheus metrics — scrape with Prometheus, graph in Grafana |
 
 ## 📈 Tech Stack
@@ -127,7 +129,7 @@ The `ros` profile starts the rclpy bridge plus a small demo publisher so you can
 docker compose --profile ros up --build
 ```
 
-The bridge subscribes to `/battery_state`, `/imu`, `/odom`, and `/diagnostics` and forwards them into the same pipeline. Point it at your own robot or a Gazebo bringup by replacing the demo publisher.
+The bridge subscribes to `/battery_state`, `/imu`, `/odom`, `/diagnostics`, plus `/map` (`nav_msgs/OccupancyGrid`, downsampled) and `/scan` (`sensor_msgs/LaserScan`, downsampled to ~5 Hz), and forwards them into the same pipeline. Point it at your own robot or a **TurtleBot3 + Nav2 bringup in Gazebo** and the dashboard renders the live map and lidar with no further changes — see [`docs/gazebo.md`](docs/gazebo.md).
 
 ## 🧪 Development & Quality
 
@@ -187,7 +189,7 @@ ingest/   Redis stream -> TimescaleDB worker
 alerts/   threshold, staleness + anomaly rule engine
 api/      FastAPI: REST, /ws/live, /metrics, static dashboard
 api/static/  the dashboard (Three.js + µPlot)
-db/       TimescaleDB schema + continuous aggregate
+db/       TimescaleDB schema + continuous aggregate (telemetry, poses, maps)
 monitoring/  Prometheus scrape config + provisioned Grafana dashboard
 bench/    pipeline benchmark harness (throughput + latency)
 tests/    unit tests: rules, schema, simulator, anomaly, metrics, bench

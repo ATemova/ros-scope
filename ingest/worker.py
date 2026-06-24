@@ -9,6 +9,7 @@ that serves the dashboard.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from datetime import UTC
 
@@ -58,6 +59,20 @@ async def flush(pool: asyncpg.Pool, tele: list, poses: list, seen: dict) -> None
                     [(rid, ts) for rid, ts in seen.items()])
 
 
+async def upsert_map(pool: asyncpg.Pool, s: Sample) -> None:
+    """Maps are single current artifacts, so upsert the latest (not batched)."""
+    m = s.map
+    await pool.execute(
+        """INSERT INTO maps (robot_id, resolution, width, height, origin_x, origin_y, data, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, now())
+           ON CONFLICT (robot_id) DO UPDATE SET
+               resolution = EXCLUDED.resolution, width = EXCLUDED.width,
+               height = EXCLUDED.height, origin_x = EXCLUDED.origin_x,
+               origin_y = EXCLUDED.origin_y, data = EXCLUDED.data, updated_at = now()""",
+        s.robot_id, float(m.get("resolution", 0)), int(m.get("width", 0)), int(m.get("height", 0)),
+        float(m.get("origin_x", 0)), float(m.get("origin_y", 0)), json.dumps(m.get("data", [])))
+
+
 async def main() -> None:
     r = aioredis.from_url(REDIS_URL)
     pool = await connect_pg()
@@ -89,6 +104,9 @@ async def main() -> None:
                     p = s.pose
                     poses.append((ts, s.robot_id, p["x"], p["y"], p["z"],
                                   p["qx"], p["qy"], p["qz"], p["qw"]))
+                elif s.kind == "map":
+                    await upsert_map(pool, s)
+                # kind == "scan": live-only, forwarded by the API, never stored
 
         if len(tele) + len(poses) >= BATCH or (not resp and (tele or poses)):
             await flush(pool, tele, poses, seen)

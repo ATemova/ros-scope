@@ -5,12 +5,17 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 ### Added
+- Occupancy map + laser scan path: new `map` and `scan` sample kinds, a synthetic
+  bordered-room map and ray-cast scans in the publisher, a `maps` table + upsert
+  in ingest, `GET /api/map`, and 3D rendering of the map (floor) and live scans
+  (point cloud). The ROS 2 bridge now consumes `/map` (OccupancyGrid) and `/scan`
+  (LaserScan); see `docs/gazebo.md` for the TurtleBot3 + Nav2 path.
 - Monitoring stack behind a `monitoring` compose profile: Prometheus scraping
   `/metrics` and a provisioned Grafana dashboard (`monitoring/`).
 - Benchmark harness (`bench/`) measuring publish/ingest throughput and end-to-end
   latency, behind a `bench` compose profile; pure stats helpers are unit-tested.
 - Prometheus `/metrics` endpoint (ingest rate, active alerts, anomalies, fleet
-  KPIs) so rosscope is itself scrapeable and Grafana-graphable. Unit-tested.
+  KPIs) so Ros Scope is itself scrapeable and Grafana-graphable. Unit-tested.
 - SVG dashboard preview (`docs/preview.svg`) as the README hero until a screen
   recording is added.
 - Multivariate anomaly detection: a rolling Mahalanobis-distance detector

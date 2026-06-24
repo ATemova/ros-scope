@@ -97,3 +97,19 @@ CREATE TABLE IF NOT EXISTS sessions (
     started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     ended_at   TIMESTAMPTZ
 );
+
+-- ---------------------------------------------------------------------------
+-- Latest occupancy map per robot (or "global"). A nav_msgs/OccupancyGrid is a
+-- single current artifact, not a time series, so only the newest is kept.
+-- The API also creates this on startup so existing volumes pick it up.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS maps (
+    robot_id   TEXT PRIMARY KEY,
+    resolution DOUBLE PRECISION,
+    width      INTEGER,
+    height     INTEGER,
+    origin_x   DOUBLE PRECISION,
+    origin_y   DOUBLE PRECISION,
+    data       JSONB,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
         except (OSError, asyncpg.PostgresError):
             await asyncio.sleep(2)
     state["redis"] = aioredis.from_url(REDIS_URL)
-    # Ensure the sessions table exists even on a pre-existing database volume.
+    # Ensure the sessions + maps tables exist even on a pre-existing volume.
     async with state["pool"].acquire() as con:
         await con.execute(
             """CREATE TABLE IF NOT EXISTS sessions (
@@ -51,6 +51,12 @@ async def lifespan(app: FastAPI):
                    name TEXT NOT NULL,
                    started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                    ended_at TIMESTAMPTZ)""")
+        await con.execute(
+            """CREATE TABLE IF NOT EXISTS maps (
+                   robot_id TEXT PRIMARY KEY,
+                   resolution DOUBLE PRECISION, width INTEGER, height INTEGER,
+                   origin_x DOUBLE PRECISION, origin_y DOUBLE PRECISION,
+                   data JSONB, updated_at TIMESTAMPTZ NOT NULL DEFAULT now())""")
     log.info("api ready")
     yield
     await state["pool"].close()
@@ -114,6 +120,25 @@ async def alerts(limit: int = Query(50, ge=1, le=500)):
         "SELECT time, robot_id, topic, rule, severity, message, value FROM alerts "
         "ORDER BY time DESC LIMIT $1", limit)
     return [dict(r) | {"time": r["time"].timestamp()} for r in rows]
+
+
+@app.get("/api/map")
+async def get_map(robot_id: str = Query("global")):
+    """Latest occupancy grid (defaults to the shared 'global' map). The
+    dashboard fetches this on load and renders it as the scene floor; live
+    updates also arrive over the WebSocket."""
+    row = await state["pool"].fetchrow(
+        "SELECT robot_id, resolution, width, height, origin_x, origin_y, data "
+        "FROM maps WHERE robot_id = $1", robot_id)
+    if row is None:
+        row = await state["pool"].fetchrow(
+            "SELECT robot_id, resolution, width, height, origin_x, origin_y, data "
+            "FROM maps ORDER BY updated_at DESC LIMIT 1")
+    if row is None:
+        return JSONResponse({"map": None})
+    d = dict(row)
+    d["data"] = json.loads(d["data"]) if isinstance(d["data"], str) else d["data"]
+    return {"map": d}
 
 
 @app.get("/api/summary")
@@ -260,7 +285,8 @@ async def ws_live(ws: WebSocket):
                     s = Sample.from_json(fields[b"data"])
                     await ws.send_json({"type": "sample", "data": {
                         "robot_id": s.robot_id, "topic": s.topic, "kind": s.kind,
-                        "ts": s.ts, "metrics": s.metrics, "pose": s.pose}})
+                        "ts": s.ts, "metrics": s.metrics, "pose": s.pose,
+                        "map": s.map, "scan": s.scan}})
     except WebSocketDisconnect:
         pass
     finally:

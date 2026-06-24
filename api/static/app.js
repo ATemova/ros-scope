@@ -70,6 +70,10 @@ function onSample(s) {
     r.pose = s.pose;
     r.trail.push([s.pose.x, s.pose.z, -s.pose.y]); // map ROS xyz -> three xyz
     if (r.trail.length > 400) r.trail.shift();
+  } else if (s.kind === "map") {
+    setMap(s.map);
+  } else if (s.kind === "scan") {
+    updateScan(r, s.scan, s.robot_id);
   }
 }
 
@@ -148,6 +152,7 @@ window.addEventListener("resize", () => {
 
 // ---- 3D pose viewer (Three.js) ------------------------------------------ //
 let scene, camera, renderer, grid;
+let mapMesh = null;
 let az = 0.7, el = 0.9, radius = 16, autorotate = true;
 
 function initScene() {
@@ -214,6 +219,67 @@ function setTrail(line, pts, hex) {
   g.computeBoundingSphere();
 }
 
+// Render an occupancy grid as a textured floor plane aligned to world coords.
+function setMap(map) {
+  if (!scene || !map || !map.data || !map.width) return;
+  const { width: W, height: H, resolution: res, origin_x: ox, origin_y: oy, data } = map;
+  const cv = document.createElement("canvas");
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext("2d");
+  const img = ctx.createImageData(W, H);
+  for (let j = 0; j < H; j++) {
+    for (let i = 0; i < W; i++) {
+      const v = data[j * W + i];
+      // free -> dark slate, occupied -> bright wall, unknown -> mid.
+      let cr = 22, cg = 30, cb = 38, a = 235;
+      if (v < 0) { cr = 28; cg = 36; cb = 44; a = 120; }
+      else if (v >= 65) { cr = 95; cg = 150; cb = 180; a = 255; }
+      else if (v > 0) { cr = 60; cg = 90; cb = 110; }
+      const px = i, py = H - 1 - j;          // flip rows: grid j=0 is origin (bottom)
+      const idx = (py * W + px) * 4;
+      img.data[idx] = cr; img.data[idx + 1] = cg; img.data[idx + 2] = cb; img.data[idx + 3] = a;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.LinearFilter;
+
+  if (mapMesh) { scene.remove(mapMesh); mapMesh.geometry.dispose(); mapMesh.material.dispose(); }
+  const geo = new THREE.PlaneGeometry(W * res, H * res);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
+  mapMesh = new THREE.Mesh(geo, mat);
+  mapMesh.rotation.x = -Math.PI / 2;
+  mapMesh.position.set(ox + W * res / 2, -0.02, -(oy + H * res / 2));  // just below the grid
+  scene.add(mapMesh);
+}
+
+// Render a laser scan as a point cloud around the robot (robot-frame -> world).
+function updateScan(r, scan, id) {
+  if (!scene || !r.pose || !scan || !scan.ranges) return;
+  const yaw = 2 * Math.atan2(r.pose.qz || 0, r.pose.qw || 1);
+  const { angle_min: a0, angle_increment: inc, range_max: rmax, ranges } = scan;
+  const pts = [];
+  for (let k = 0; k < ranges.length; k++) {
+    const d = ranges[k];
+    if (!(d > 0) || d >= (rmax || 1e9) * 0.999) continue;   // skip no-return beams
+    const a = yaw + a0 + k * inc;
+    const wx = r.pose.x + d * Math.cos(a);
+    const wy = r.pose.y + d * Math.sin(a);
+    pts.push(wx, 0.06, -wy);                                  // ROS xy -> three xz
+  }
+  if (!r.scanPoints) {
+    r.scanPoints = new THREE.Points(
+      new THREE.BufferGeometry(),
+      new THREE.PointsMaterial({ color: colorFor(id), size: 0.14,
+        sizeAttenuation: true, transparent: true, opacity: 0.85 }));
+    scene.add(r.scanPoints);
+  }
+  const arr = new Float32Array(pts);
+  r.scanPoints.geometry.setAttribute("position", new THREE.BufferAttribute(arr, 3));
+  r.scanPoints.geometry.setDrawRange(0, pts.length / 3);
+  r.scanPoints.geometry.computeBoundingSphere();
+}
+
 function rebuildScene() {
   if (!scene) return;
   for (const id of robots.keys()) ensureRobotVisual(id);
@@ -239,10 +305,13 @@ function animate() {
   if (autorotate) az += 0.0015;
   camera.position.set(radius * Math.cos(az) * Math.sin(el), radius * Math.cos(el), radius * Math.sin(az) * Math.sin(el));
   camera.lookAt(0, 0, 0);
-  if (mode === "replay") renderReplayScene();
-  else {
+  if (mode === "replay") {
+    for (const [, r] of robots) if (r.scanPoints) r.scanPoints.visible = false;
+    renderReplayScene();
+  } else {
     const pulse = 1 + 0.06 * Math.sin(performance.now() * 0.004);
     for (const [id, r] of robots) {
+      if (r.scanPoints) r.scanPoints.visible = true;
       if (r.marker && r.pose) {
         r.marker.position.set(r.pose.x, 0.6, -r.pose.y);
         r.marker.scale.setScalar(pulse);
@@ -453,8 +522,16 @@ setInterval(() => {
 }, 50);
 
 // ---- boot ---------------------------------------------------------------- //
+async function loadMap() {
+  try {
+    const res = await (await fetch("/api/map")).json();
+    if (res && res.map) setMap(res.map);
+  } catch (_) { /* map appears on the next periodic publish */ }
+}
+
 document.getElementById("alerts").innerHTML = `<li class="empty">no alerts yet</li>`;
 initScene();
+loadMap();
 loadAlerts();
 pollHealth();
 pollSummary();
