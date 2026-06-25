@@ -19,6 +19,7 @@ import time
 from dataclasses import dataclass
 
 from alerts.anomaly import AnomalyDetector
+from alerts.detector import LearnedDetector, load_model
 from common.log import get_logger
 
 # Note: asyncpg / redis / yaml are imported lazily inside the functions that
@@ -115,6 +116,24 @@ async def staleness_loop(pool, r, staleness, last_seen, cd) -> None:
             await persist_and_publish(pool, r, alert)
 
 
+def _build_detector(acfg: dict):
+    """Pick the anomaly detector: a frozen trained model when method=learned and
+    the model file loads, otherwise the online rolling detector."""
+    cooldown = acfg.get("cooldown_s", 20)
+    if acfg.get("method") == "learned":
+        path = acfg.get("model_path", "alerts/model.json")
+        try:
+            model = load_model(path)
+            log.info("anomaly: learned model %s (threshold %.2f)", path, model["threshold"])
+            return LearnedDetector(model, cooldown_s=cooldown)
+        except (OSError, KeyError, ValueError) as e:
+            log.warning("anomaly: could not load learned model (%s); using rolling", e)
+    return AnomalyDetector(
+        features=acfg.get("features", ["voltage", "cpu_temp", "yaw_rate"]),
+        window=acfg.get("window", 240), warmup=acfg.get("warmup", 60),
+        threshold=acfg.get("threshold", 4.0), cooldown_s=cooldown)
+
+
 async def main() -> None:
     import redis.asyncio as aioredis
     import yaml
@@ -126,10 +145,7 @@ async def main() -> None:
     acfg = rules.get("anomaly", {}) or {}
     detector = None
     if acfg.get("enabled"):
-        detector = AnomalyDetector(
-            features=acfg.get("features", ["voltage", "cpu_temp", "yaw_rate"]),
-            window=acfg.get("window", 240), warmup=acfg.get("warmup", 60),
-            threshold=acfg.get("threshold", 4.0), cooldown_s=acfg.get("cooldown_s", 20))
+        detector = _build_detector(acfg)
     anomaly_severity = acfg.get("severity", "warning")
 
     r = aioredis.from_url(REDIS_URL)

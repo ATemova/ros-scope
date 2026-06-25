@@ -46,11 +46,19 @@ staleness:
     cooldown_s: 15
     message: "No odometry — robot localization lost"
 
-# Multivariate anomaly detection (Mahalanobis distance over a rolling window).
-# Flags unusual *combinations* of signals that per-metric thresholds miss.
+# Multivariate anomaly detection. Flags unusual *combinations* of signals that
+# per-metric thresholds miss. Two methods:
+#   learned  - a frozen model trained offline on clean data (alerts/model.json),
+#              with a threshold calibrated to a target false-positive rate.
+#              Retrain with: python3 -m alerts.train_detector
+#   rolling  - an online Mahalanobis detector over a moving window (no model
+#              file needed). Used automatically if the model fails to load.
 anomaly:
   enabled: true
+  method: learned
+  model_path: alerts/model.json
   features: [voltage, cpu_temp, yaw_rate]
+  # rolling-method fallback parameters:
   window: 240        # samples kept per robot
   warmup: 60         # samples before scoring starts
   threshold: 4.0     # Mahalanobis distance cut

@@ -5,6 +5,16 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 ### Added
+- Head-to-head detector evaluation (`alerts/eval_detector.py`): learned vs
+  rolling on the same labeled stream, showing the frozen model holds recall
+  (~1.0) where the rolling detector's recall collapses as faults poison its
+  moving baseline.
+- Offline-trained anomaly detector (`alerts/detector.py`): a Gaussian/Mahalanobis
+  model fit on clean data with a threshold calibrated to a target false-positive
+  rate, versioned to `alerts/model.json`. Trained + evaluated by
+  `alerts/train_detector.py` (precision 0.98 / recall 1.00 on injected faults).
+  The engine uses it when `anomaly.method: learned`, falling back to the online
+  rolling detector if the model is missing.
 - Occupancy map + laser scan path: new `map` and `scan` sample kinds, a synthetic
   bordered-room map and ray-cast scans in the publisher, a `maps` table + upsert
   in ingest, `GET /api/map`, and 3D rendering of the map (floor) and live scans
