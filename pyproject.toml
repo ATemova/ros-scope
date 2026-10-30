@@ -1,6 +1,6 @@
 [project]
 name = "rosscope"
-version = "0.1.0"
+version = "1.0.0"
 description = "Live telemetry, health, and 3D pose for ROS 2 robot fleets."
 requires-python = ">=3.12"
 

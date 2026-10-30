@@ -138,7 +138,7 @@ Lint and the full test suite run with no containers — the rule engine, schema,
 ```bash
 pip install -r requirements-dev.txt
 ruff check .
-pytest -q                  # 27 tests
+pytest -q                  # 35 tests
 ```
 
 CI runs lint and tests as separate jobs on every push. See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`CHANGELOG.md`](CHANGELOG.md).
@@ -198,11 +198,11 @@ The model is unsupervised — it never sees faults during training; the labels e
 
 A few choices that make this more than a toy, and what they buy:
 
-- **Stream buffer, not direct DB writes.** Redis Streams decouple producers from storage and survive a worker restart via consumer groups, so no samples are lost during a redeploy.
+- **Stream buffer, not direct DB writes.** Redis Streams decouple producers from storage. The ingest worker acks entries only after their batch is committed, and on startup reclaims entries a crashed consumer left pending (`XAUTOCLAIM`), so a restart or redeploy loses no samples.
 - **Batched `COPY` ingestion.** The ingest worker accumulates samples and writes them with `copy_records_to_table`, dramatically cheaper than row-by-row inserts at sensor rates.
-- **Continuous aggregate for history.** Charts over long windows read a 1-second rollup instead of raw rows, keeping payloads small and queries fast; raw data has a 7-day retention policy.
+- **Continuous aggregate for history.** Charts over long windows read a 1-second rollup instead of raw rows, keeping payloads small and queries fast; the view runs in real-time mode so the newest seconds are included, and raw telemetry and poses have a 7-day retention policy.
 - **Staleness as a first-class signal.** "No data" is often the most important alert in robotics — the engine tracks last-seen time per topic and fires when a stream goes quiet, not just on bad values.
-- **Anomalies beyond thresholds.** An offline-trained Gaussian model (Mahalanobis distance) with a threshold calibrated to a 1% false-positive rate catches unusual multivariate patterns a CPU-temp blip that never crosses the hard limit, say measured at 0.98 precision / 1.00 recall on injected faults. The model is versioned to disk and retrainable; an online rolling detector is the fallback.
+- **Anomalies beyond thresholds.** An offline-trained Gaussian model (Mahalanobis distance) with a threshold calibrated to a 1% false-positive rate catches unusual multivariate patterns that never cross a hard limit (say, a CPU-temp blip paired with an odd yaw rate), measured at 0.98 precision / 1.00 recall on injected faults. The model is versioned to disk and retrainable; an online rolling detector is the fallback.
 - **Interchangeable producers.** A shared envelope means the synthetic publisher and the ROS 2 bridge are drop-in replacements — which is what lets the project demo with zero hardware.
 - **Self-observable.** A Prometheus `/metrics` endpoint exposes ingest rate, active alerts, anomalies, and fleet KPIs, so the observability platform is itself observable.
 

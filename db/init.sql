@@ -83,8 +83,13 @@ SELECT add_continuous_aggregate_policy('telemetry_1s',
     schedule_interval => INTERVAL '30 seconds',
     if_not_exists => TRUE);
 
--- Keep raw telemetry for 7 days; the rollup stays longer and is cheap.
+-- Real-time aggregation: long-window charts include the newest, not yet
+-- materialized seconds instead of stopping at the last refresh.
+ALTER MATERIALIZED VIEW telemetry_1s SET (timescaledb.materialized_only = false);
+
+-- Keep raw telemetry and poses for 7 days; the rollup stays longer and is cheap.
 SELECT add_retention_policy('telemetry', INTERVAL '7 days', if_not_exists => TRUE);
+SELECT add_retention_policy('poses', INTERVAL '7 days', if_not_exists => TRUE);
 
 -- ---------------------------------------------------------------------------
 -- Recorded sessions. "Recording" only bookmarks a time range, since every

@@ -170,7 +170,9 @@ async def main() -> None:
                 ids.append(msg_id)
                 s = Sample.from_json(fields[b"data"])
                 now = time.time()
-                last_seen[(s.robot_id, s.topic)] = s.ts
+                # Receive time, not producer time: robot clocks drift, and a skewed
+                # clock would otherwise make a healthy topic look stale.
+                last_seen[(s.robot_id, s.topic)] = now
                 for alert in evaluate_sample(s, thresholds, cd, now):
                     await persist_and_publish(pool, r, alert)
                 if detector and s.kind == "scalar":

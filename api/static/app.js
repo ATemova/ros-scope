@@ -11,6 +11,10 @@ const colorFor = (() => {
   };
 })();
 
+// Producer-supplied strings (robot ids, topics, alert text) are untrusted.
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
 // ---- shared state -------------------------------------------------------- //
 const robots = new Map();           // id -> { lastMetrics, buffers, trail, marker, line }
 const SERIES = ["voltage", "cpu_temp"];
@@ -57,6 +61,11 @@ function connect() {
 function onSample(s) {
   const now = performance.now();
   msgWindow.push(now);
+
+  // The occupancy map is published under the "global" id and is scene geometry,
+  // not a fleet member — render it without registering a robot/marker/legend row.
+  if (s.kind === "map") { setMap(s.map); return; }
+
   const r = robot(s.robot_id);
 
   if (s.kind === "scalar") {
@@ -70,8 +79,6 @@ function onSample(s) {
     r.pose = s.pose;
     r.trail.push([s.pose.x, s.pose.z, -s.pose.y]); // map ROS xyz -> three xyz
     if (r.trail.length > 400) r.trail.shift();
-  } else if (s.kind === "map") {
-    setMap(s.map);
   } else if (s.kind === "scan") {
     updateScan(r, s.scan, s.robot_id);
   }
@@ -109,7 +116,7 @@ setInterval(pollSummary, 2000);
 function refreshRobotSelect() {
   const sel = document.getElementById("robot-select");
   const ids = [...robots.keys()].sort();
-  sel.innerHTML = ids.map((id) => `<option value="${id}">${id}</option>`).join("");
+  sel.innerHTML = ids.map((id) => `<option value="${esc(id)}">${esc(id)}</option>`).join("");
   if (!selected || !robots.has(selected)) { selected = ids[0]; sel.value = selected; }
 }
 document.getElementById("robot-select").addEventListener("change", (e) => { selected = e.target.value; renderLegend(); });
@@ -289,8 +296,8 @@ function rebuildScene() {
 function renderLegend() {
   const el = document.getElementById("legend");
   el.innerHTML = [...robots.keys()].sort()
-    .map((id) => `<span data-robot="${id}" class="${id === selected ? "active" : ""}">
-      <b style="background:${colorFor(id)}"></b>${id}</span>`).join("");
+    .map((id) => `<span data-robot="${esc(id)}" class="${id === selected ? "active" : ""}">
+      <b style="background:${colorFor(id)}"></b>${esc(id)}</span>`).join("");
   el.querySelectorAll("span[data-robot]").forEach((span) => {
     span.onclick = () => {
       selected = span.dataset.robot;
@@ -340,9 +347,9 @@ async function pollHealth() {
       const gap = now - c.last_seen;
       const cls = gap > 3 ? "stale" : (c.hz < 1 ? "warn" : "");
       return `<div class="channel ${cls}">
-        <div class="channel__top"><span class="channel__robot">${c.robot_id}</span>
+        <div class="channel__top"><span class="channel__robot">${esc(c.robot_id)}</span>
         <span class="channel__hz">${gap > 3 ? "stale" : c.hz + " Hz"}</span></div>
-        <div class="channel__topic">${c.topic}</div></div>`;
+        <div class="channel__topic">${esc(c.topic)}</div></div>`;
     }).join("") || `<div class="empty">waiting for telemetry…</div>`;
   } catch (_) {}
 }
@@ -358,9 +365,9 @@ function onAlert(a, live) {
   const empty = ul.querySelector(".empty"); if (empty) empty.remove();
   const t = new Date((a.time || a.ts) * 1000).toLocaleTimeString();
   const li = document.createElement("li");
-  li.className = `alert ${a.severity}`;
-  li.innerHTML = `<i></i><div><div class="alert__msg">${a.message}</div>
-    <div class="alert__meta">${a.robot_id}${a.topic ? " · " + a.topic : ""} · ${a.rule}</div></div>
+  li.className = `alert ${esc(a.severity)}`;
+  li.innerHTML = `<i></i><div><div class="alert__msg">${esc(a.message)}</div>
+    <div class="alert__meta">${esc(a.robot_id)}${a.topic ? " · " + esc(a.topic) : ""} · ${esc(a.rule)}</div></div>
     <span class="alert__time">${t}</span>`;
   ul.prepend(li);
   while (ul.children.length > 60) ul.lastChild.remove();
@@ -401,7 +408,7 @@ async function loadSessions() {
     const sel = document.getElementById("session-select");
     const cur = sel.value;
     sel.innerHTML = `<option value="">live view</option>` +
-      rows.filter((s) => s.end).map((s) => `<option value="${s.id}">▶ ${s.name} (${fmt(s.seconds)})</option>`).join("");
+      rows.filter((s) => s.end).map((s) => `<option value="${s.id}">▶ ${esc(s.name)} (${fmt(s.seconds)})</option>`).join("");
     sel.value = cur;
   } catch (_) {}
 }
@@ -421,7 +428,7 @@ async function enterReplay(id) {
   document.getElementById("rp-name").textContent = `${data.name} · ${fmt(data.end - data.start)}`;
   document.getElementById("rp-speed").value = "1";
   const sel = document.getElementById("robot-select");
-  sel.innerHTML = data.robots.map((r) => `<option value="${r}">${r}</option>`).join("");
+  sel.innerHTML = data.robots.map((r) => `<option value="${esc(r)}">${esc(r)}</option>`).join("");
   selected = data.robots[0]; sel.value = selected;
   data.robots.forEach(ensureRobotVisual);
   updatePlayBtn();
@@ -485,9 +492,9 @@ function replayAlertsAndKpis() {
     replay.lastAlertN = shown.length;
     const ul = document.getElementById("alerts");
     ul.innerHTML = shown.length
-      ? shown.slice().reverse().slice(0, 60).map((a) => `<li class="alert ${a.severity}"><i></i>
-          <div><div class="alert__msg">${a.message}</div>
-          <div class="alert__meta">${a.robot_id}${a.topic ? " · " + a.topic : ""} · ${a.rule}</div></div>
+      ? shown.slice().reverse().slice(0, 60).map((a) => `<li class="alert ${esc(a.severity)}"><i></i>
+          <div><div class="alert__msg">${esc(a.message)}</div>
+          <div class="alert__meta">${esc(a.robot_id)}${a.topic ? " · " + esc(a.topic) : ""} · ${esc(a.rule)}</div></div>
           <span class="alert__time">${fmt(a.t - replay.t0)}</span></li>`).join("")
       : `<li class="empty">no alerts yet</li>`;
     document.getElementById("alert-badge").textContent = shown.length;

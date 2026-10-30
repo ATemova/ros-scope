@@ -3,7 +3,26 @@
 All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [1.0.0] - 2026-10-30
+### Fixed
+- Ingest worker acked stream entries before their batch was committed, so a
+  crash could drop up to one batch. Acks now follow the commit, and pending
+  entries left by a dead consumer are reclaimed with `XAUTOCLAIM` on startup.
+- Topic-health rate counted metric rows, so multi-metric topics such as
+  `/battery_state` reported double their real rate.
+- Staleness tracking used the producer's clock; it now uses receive time, so
+  robot clock skew cannot fake a stale topic.
+- Dashboard rendered producer-supplied strings (robot ids, topics, alert text)
+  as raw HTML; they are now escaped.
+- Occupancy map no longer shows up as a phantom "global" robot.
+- `requirements-dev.txt` was missing numpy, so the documented local test run
+  failed; CI now installs from the same file.
+
+### Changed
+- `telemetry_1s` runs in real-time mode; poses get a 7-day retention policy.
+- API has a compose healthcheck; Prometheus waits for it.
+- Makefile gains `lint`, `check`, `monitoring` and `bench` targets.
+
 ### Added
 - Head-to-head detector evaluation (`alerts/eval_detector.py`): learned vs
   rolling on the same labeled stream, showing the frozen model holds recall

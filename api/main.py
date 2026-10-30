@@ -41,7 +41,10 @@ async def lifespan(app: FastAPI):
             state["pool"] = await asyncpg.create_pool(PG_DSN, min_size=1, max_size=8)
             break
         except (OSError, asyncpg.PostgresError):
+            log.info("waiting for postgres...")
             await asyncio.sleep(2)
+    else:
+        raise RuntimeError("could not connect to postgres")
     state["redis"] = aioredis.from_url(REDIS_URL)
     # Ensure the sessions + maps tables exist even on a pre-existing volume.
     async with state["pool"].acquire() as con:
@@ -63,7 +66,7 @@ async def lifespan(app: FastAPI):
     await state["redis"].aclose()
 
 
-app = FastAPI(title="rosscope", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="rosscope", version="1.0.0", lifespan=lifespan)
 
 
 # --------------------------------------------------------------------------- #
@@ -249,11 +252,13 @@ def datetime_now():
 @app.get("/api/health")
 async def health():
     """Per (robot, topic) last-seen + observed rate over the last 10s.
-    This powers the topic-health strip on the dashboard."""
+    One message carries several metric rows (e.g. voltage + percentage), so the
+    rate counts distinct sample timestamps, not rows. This powers the
+    topic-health strip on the dashboard."""
     rows = await state["pool"].fetch(
         """SELECT robot_id, topic,
                   max(time) AS last_seen,
-                  count(*) FILTER (WHERE time > now() - interval '10 seconds') / 10.0 AS hz
+                  count(DISTINCT time) FILTER (WHERE time > now() - interval '10 seconds') / 10.0 AS hz
            FROM telemetry
            WHERE time > now() - interval '1 minute'
            GROUP BY robot_id, topic ORDER BY robot_id, topic""")
